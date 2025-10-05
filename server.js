@@ -1,48 +1,46 @@
 import express from "express";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-// Read Supabase config from environment variables (set these in Render)
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_API_KEY = process.env.SUPABASE_API_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_API_KEY) {
-  console.warn("Warning: SUPABASE_URL or SUPABASE_API_KEY not set in environment!");
-}
+const SUPABASE_URL = "https://emwkifrkrkkbtcfjajyy.supabase.co/rest/v1/wire_status";
+const SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtd2tpZnJrcmtrYnRjZmphanl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3MzY3NTksImV4cCI6MjA3MzMxMjc1OX0._2h6EJvb3uVx9nSdG9YZLIoS3m9A6CkEfBwGNS4-o3Y";
 
 app.post("/update", async (req, res) => {
   try {
-    const payload = req.body;
-    console.log("📥 Received from Wokwi:", payload);
+    const { wire_name, status, subsystem, temperature } = req.body;
 
-    // Supabase REST accepts an array for upsert; wrap payload
-    const body = JSON.stringify([payload]);
-
-    const supaUrl = `${SUPABASE_URL}?on_conflict=wire_name`;
-    const r = await fetch(supaUrl, {
+    const response = await fetch(SUPABASE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": SUPABASE_API_KEY,
-        "Authorization": `Bearer ${SUPABASE_API_KEY}`,
-        // Prefer merge-duplicates so existing rows are updated (upsert)
-        "Prefer": "resolution=merge-duplicates,return=minimal"
+        apikey: SUPABASE_API_KEY,
+        Authorization: `Bearer ${SUPABASE_API_KEY}`,
+        Prefer: "return=minimal"
       },
-      body
+      body: JSON.stringify({
+        wire_name,
+        status,
+        subsystem,
+        temperature
+      })
     });
 
-    const text = await r.text();
-    console.log("📤 Supabase response:", r.status, text);
-    res.status(200).json({ ok: true, supabaseStatus: r.status, supabaseBody: text });
+    if (response.ok) {
+      console.log("✅ Sent to Supabase:", req.body);
+      res.status(200).send("OK");
+    } else {
+      const err = await response.text();
+      console.error("🔴 Supabase error:", err);
+      res.status(500).send(err);
+    }
   } catch (err) {
-    console.error("❌ Bridge error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("🔥 Server error:", err);
+    res.status(500).send("Server error");
   }
 });
 
-app.get("/", (req, res) => res.send("Wokwi → Supabase bridge is running"));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Bridge listening on ${PORT}`));
+app.listen(10000, () => console.log("🌐 Bridge running on port 10000"));
